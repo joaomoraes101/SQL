@@ -72,3 +72,75 @@ FROM BIT_DB.FebSales
 WHERE location like '%Los Angeles%'
 GROUP BY Product
 ORDER BY Amount;
+
+--9. Which locations in New York received at least 3 orders in January, and how many orders did they each receive?
+
+SELECT Jan.location AS Location,
+Count(Jan.orderID) AS Orders_Per_Location
+FROM BIT_DB.JanSales AS Jan
+WHERE Location LIKE '%New York%'
+AND Product <> ''
+AND Product <> 'Product'
+AND LENGTH(Jan.orderID) = 6
+GROUP BY Location
+HAVING Orders_Per_Location >= 3
+ORDER BY Orders_Per_Location;
+
+--10. How many of each type of headphone were sold in February?
+
+SELECT Feb.Product AS Product,
+SUM(Feb.Quantity) AS Total_Amount
+FROM BIT_DB.FebSales AS Feb
+WHERE Product LIKE '%Headphone%'
+AND Product <> ''
+AND Product <> 'Product'
+AND LENGTH(Feb.orderID) = 6
+GROUP BY Feb.Product
+ORDER BY Total_Amount
+;
+
+SELECT sum(Quantity) as quantity,
+Product
+FROM BIT_DB.FebSales 
+WHERE Product like '%Headphones%'
+GROUP BY Product;
+
+--11. What was the average amount spent per account in February?
+
+SELECT ROUND(AVG(Total_Spent_Per_Customer), 2) Average_Amount_Spent_Per_Customer
+FROM(
+    SELECT Cust.acctnum,
+    ROUND(SUM(Feb.Quantity*Feb.Price), 2) AS Total_Spent_Per_Customer
+    FROM BIT_DB.FebSales AS Feb
+    INNER JOIN BIT_DB.Customers AS Cust
+    ON Feb.orderID = Cust.order_id
+    WHERE Feb.Product <> ''
+    AND Feb.Product <> 'Product'
+    AND LENGTH(Feb.orderID) = 6
+    GROUP BY Cust.acctnum);
+
+--12. What was the average quantity of products purchased per account in February?
+
+SELECT ROUND(AVG(Products_Purchased_Per_Customer), 2) Average_Products_Purchased
+FROM(
+    SELECT Cust.acctnum,
+    ROUND(SUM(Feb.Quantity), 2) AS Products_Purchased_Per_Customer
+    FROM BIT_DB.FebSales AS Feb
+    INNER JOIN BIT_DB.Customers AS Cust
+    ON Feb.orderID = Cust.order_id
+    WHERE Feb.Product <> ''
+    AND Feb.Product <> 'Product'
+    AND LENGTH(Feb.orderID) = 6
+    GROUP BY Cust.acctnum);
+
+--13. Which product brought in the most revenue in January and how much revenue did it bring in total?
+
+SELECT Jan.Product AS Product,
+ROUND(SUM(Jan.Quantity*Jan.Price), 2) AS Revenue
+FROM BIT_DB.JanSales AS Jan
+WHERE Product <> ''
+AND Product <> 'Product'
+AND LENGTH(orderID) = 6
+GROUP BY Product
+ORDER BY Revenue desc
+LIMIT 1;
