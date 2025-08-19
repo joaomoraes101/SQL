@@ -64,3 +64,11 @@ AND Product <> ''
 AND Product <> 'Product'
 ORDER BY acctnum;
 
+--8. List all the products sold in Los Angeles in February, and include how many of each were sold.
+
+SELECT distinct Product,
+SUM(Quantity) AS Amount
+FROM BIT_DB.FebSales 
+WHERE location like '%Los Angeles%'
+GROUP BY Product
+ORDER BY Amount;
