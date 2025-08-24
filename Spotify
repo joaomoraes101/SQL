@@ -1,0 +1,190 @@
+INSERT INTO BIT_DB.Spotifydata (id, artist_name, track_name, track_id, popularity, danceability, energy, song_key, loudness, song_mode, speechiness, acousticness, instrumentalness, liveness, valence, tempo, duration_ms, time_signature) VALUES
+(42, 'Internet Money', 'Lemonade (feat. Gunna, Don Toliver & NAV)', '7hxHWCCAIIxFLCzvDgnQHX', 81, 0.8, 0.658, 1, -6.142, 0, 0.079, 0.25, 0, 0.111, 0.462, 140.042, 195429, 4);
+
+--1. Which artist had the most songs in the Top 50 of 2021?
+--(Give me the artist name and how many times they appear.)
+
+SELECT artist_name AS Artist,
+COUNT(Spotify.artist_name) AS Frequency
+FROM BIT_DB.Spotifydata AS Spotify
+GROUP BY Spotify.artist_name
+ORDER BY Frequency desc
+LIMIT 1;
+
+--2. What’s the average danceability of the top 10 most popular tracks?
+--(I want to know if the most popular ones are good for dancing.)
+
+SELECT AVG(danceability) AS Average_Danceability_of_Top_10_Popular
+FROM(
+    SELECT danceability
+    FROM BIT_DB.Spotifydata AS Spotify
+    ORDER BY popularity desc
+    LIMIT 10);
+    
+-- Removing popularity column from subquery makes it more efficient since it doesn't have to be there
+
+--3. Which song had the highest energy score?
+--(Just give me the song name and the artist.)
+
+SELECT track_name AS Song,
+artist_name AS Artist
+FROM BIT_DB.Spotifydata AS Spotify
+ORDER BY energy desc
+LIMIT 1;
+
+--If more than one song has the same highest energy value, a more precise query would be:
+
+SELECT track_name AS Song,
+artist_name AS Artist
+FROM BIT_DB.Spotifydata
+WHERE energy = (SELECT MAX(energy) FROM BIT_DB.Spotifydata);
+
+--4. How many songs are in a minor key vs a major key?
+--(Use the mode column — 0 is minor, 1 is major.)
+
+SELECT (SELECT COUNT(*)
+    FROM BIT_DB.Spotifydata AS Spotify
+    WHERE song_mode = 0) AS Minor_Key,
+    COUNT(*) - (SELECT COUNT(*)
+    FROM BIT_DB.Spotifydata AS Spotify
+    WHERE song_mode = 0) AS Major_Key
+FROM BIT_DB.Spotifydata AS Spotify;
+
+--Another way to write the query without subqueries:
+
+SELECT 
+  CASE song_mode 
+    WHEN 0 THEN 'Minor' 
+    WHEN 1 THEN 'Major' 
+    ELSE 'Unknown' 
+  END AS Mode,
+  COUNT(*) AS Song
+FROM BIT_DB.Spotifydata
+GROUP BY song_mode;
+
+--5. List the top 5 artists with the highest average popularity across their songs.
+--(Only include artists with more than 1 song on the list.)
+    
+SELECT artist_name AS Artist,
+ROUND(AVG(popularity), 0) AS Average_Popularity,
+COUNT (*) AS Frequency
+FROM BIT_DB.Spotifydata AS Spotify
+GROUP BY artist_name
+HAVING Frequency > 1
+ORDER BY Average_Popularity desc
+LIMIT 5;
+
+--6. Which track is the longest in duration?
+--(Give it in minutes and seconds.)
+
+SELECT track_name AS Song,
+FLOOR(duration_ms/60000) AS Minutes,
+ROUND(duration_ms/1000 - FLOOR(duration_ms/60000)*60, 0) AS Seconds
+FROM BIT_DB.Spotifydata AS Spotify
+ORDER BY Minutes desc, Seconds desc
+LIMIT 1;
+
+--Option 2, for a more precise approach if more than 1 song had same max duration
+
+SELECT track_name AS Song,
+FLOOR(duration_ms/60000) AS Minutes,
+duration_ms/1000 - FLOOR(duration_ms/60000)*60 AS seconds
+FROM BIT_DB.Spotifydata AS Spotify
+WHERE duration_ms = (SELECT MAX(duration_ms) FROM BIT_DB.Spotifydata AS Spotify);
+
+--7. What is the average valence (musical positivity) of songs with above-average tempo?
+--(Let’s see if faster songs are also happier.)
+
+SELECT AVG(valence) AS Average_Musical_Positivity
+FROM BIT_DB.Spotifydata
+WHERE tempo > (SELECT AVG(tempo)
+FROM BIT_DB.Spotifydata);
+
+--8. Which song had the highest acousticness, and who performed it?
+
+SELECT track_name AS Song,
+artist_name AS Artist,
+acousticness
+FROM BIT_DB.Spotifydata
+WHERE acousticness = (SELECT MAX(acousticness) FROM BIT_DB.Spotifydata);
+
+--9. Give me a list of all tracks with instrumentalness above 0.5.
+--(I want to hear songs with no vocals.)
+
+SELECT track_name AS Song,
+instrumentalness
+FROM BIT_DB.Spotifydata
+WHERE instrumentalness > 0.5
+ORDER BY instrumentalness desc;
+
+--10. What’s the average loudness level for all songs in the Top 50?
+--(I’m just curious how 'loud' pop music is, on average.)
+
+SELECT AVG(loudness) AS Average_Loudness
+FROM BIT_DB.Spotifydata;
+
+--11. Which artist has the highest average popularity across all their songs?
+--(Return artist name + total popularity. Show all if there’s a tie.)
+
+SELECT artist_name AS Artist,
+Total_Popularity AS Popularity
+FROM(
+    SELECT artist_name,
+    ROUND(AVG(popularity), 0) AS Total_Popularity
+    FROM BIT_DB.Spotifydata
+    GROUP BY artist_name)
+WHERE Total_Popularity = (SELECT MAX(Total_Popularity) FROM (SELECT artist_name,
+    ROUND(AVG(popularity), 0) AS Total_Popularity
+    FROM BIT_DB.Spotifydata
+    GROUP BY artist_name));
+    
+--Using HAVING
+
+SELECT artist_name AS Artist,
+ROUND(AVG(popularity), 0) AS Average_Popularity
+FROM BIT_DB.Spotifydata
+GROUP BY artist_name
+HAVING ROUND(AVG(popularity), 0) = (SELECT ROUND(MAX(avg_pop)) FROM (
+    SELECT AVG(popularity) AS avg_pop
+    FROM BIT_DB.Spotifydata
+    GROUP BY artist_name));
+
+--12. Give me the top 3 songs with energy above average and acousticness above average.
+--(Return song name, artist, energy, and acousticness. Sort by energy, descending.)
+
+--Top 3 ordered by energy
+
+SELECT track_name AS Song,
+artist_name AS Artist,
+energy AS Energy,
+acousticness AS Acousticness
+FROM BIT_DB.Spotifydata
+WHERE energy > (SELECT AVG(energy) FROM BIT_DB.Spotifydata)
+AND acousticness > (SELECT AVG(acousticness) FROM BIT_DB.Spotifydata)
+ORDER BY Energy desc
+LIMIT 3;
+
+--Top 3 ordered by Acousticness
+
+SELECT track_name AS Song,
+artist_name AS Artist,
+energy AS Energy,
+acousticness AS Acousticness
+FROM BIT_DB.Spotifydata
+WHERE energy > (SELECT AVG(energy) FROM BIT_DB.Spotifydata)
+AND acousticness > (SELECT AVG(acousticness) FROM BIT_DB.Spotifydata)
+ORDER BY Acousticness desc
+LIMIT 3;
+
+--Top 3 ordered by product of Acousticness and Energy
+
+SELECT track_name AS Song,
+artist_name AS Artist,
+energy AS Energy,
+acousticness AS Acousticness,
+ROUND(energy*acousticness, 3) AS Factor
+FROM BIT_DB.Spotifydata
+WHERE energy > (SELECT AVG(energy) FROM BIT_DB.Spotifydata)
+AND acousticness > (SELECT AVG(acousticness) FROM BIT_DB.Spotifydata)
+ORDER BY Factor desc
+LIMIT 3;
