@@ -1,6 +1,3 @@
-INSERT INTO BIT_DB.Spotifydata (id, artist_name, track_name, track_id, popularity, danceability, energy, song_key, loudness, song_mode, speechiness, acousticness, instrumentalness, liveness, valence, tempo, duration_ms, time_signature) VALUES
-(42, 'Internet Money', 'Lemonade (feat. Gunna, Don Toliver & NAV)', '7hxHWCCAIIxFLCzvDgnQHX', 81, 0.8, 0.658, 1, -6.142, 0, 0.079, 0.25, 0, 0.111, 0.462, 140.042, 195429, 4);
-
 --1. Which artist had the most songs in the Top 50 of 2021?
 --(Give me the artist name and how many times they appear.)
 
@@ -187,4 +184,5 @@ FROM BIT_DB.Spotifydata
 WHERE energy > (SELECT AVG(energy) FROM BIT_DB.Spotifydata)
 AND acousticness > (SELECT AVG(acousticness) FROM BIT_DB.Spotifydata)
 ORDER BY Factor desc
+
 LIMIT 3;
