@@ -1,0 +1,363 @@
+--1. List all streets with a safety rating ≥ 4.
+
+SELECT street AS Street,
+safetyrating AS Rating
+FROM BIT_DB.CityBikeLanes 
+WHERE safetyrating >= 4
+ORDER BY Rating desc;
+
+--2. Get all bike lanes installed after 2010.
+
+SELECT id,
+street,
+year_installed
+FROM CityBikeLanes
+WHERE year_installed > 2010
+ORDER BY year_installed;
+
+--3. Find the 5 most recently updated lanes (year_updated).
+
+SELECT id,
+street,
+year_updated
+FROM CityBikeLanes
+ORDER BY year_updated desc
+LIMIT 5;
+
+--4. Show all protected lanes.
+
+SELECT id,
+street,
+protected
+FROM CityBikeLanes
+WHERE protected = 'yes'
+ORDER BY street;
+
+--5. Return distinct years when lanes were installed.
+
+SELECT year_installed
+FROM CityBikeLanes
+GROUP BY year_installed
+ORDER BY year_installed;
+
+--6. Sort all lanes by width in descending order.
+
+SELECT id,
+street,
+width_feet
+FROM CityBikeLanes
+ORDER BY width_feet desc, street;
+
+--7. Count how many lanes were installed per year.
+
+SELECT year_installed,
+COUNT(year_installed) AS total_lanes
+FROM CityBikeLanes
+GROUP BY year_installed
+ORDER BY year_installed;
+
+--8. Find the average safety rating of protected vs. unprotected lanes.
+
+SELECT protected,
+ROUND(AVG(safetyrating), 1) AS avg_rating
+FROM CityBikeLanes
+GROUP BY protected
+ORDER BY protected desc;
+
+--9. Get the widest lane and its street name.
+
+SELECT street,
+width_feet AS Width
+FROM CityBikeLanes
+WHERE width_feet = (SELECT MAX(width_feet) FROM CityBikeLanes)
+ORDER BY street;
+
+--10. Which year had the most new lanes installed?
+
+WITH Installation AS (
+SELECT year_installed,
+COUNT(year_installed) as total_lanes
+FROM CityBikeLanes
+GROUP BY year_installed)
+
+SELECT year_installed,
+total_lanes
+FROM Installation
+WHERE total_lanes = (SELECT MAX(total_lanes) FROM Installation);
+
+--11. Find all streets where the average safety rating < 3.
+
+SELECT street,
+AVG(safetyrating) AS Rating
+FROM CityBikeLanes
+GROUP BY street
+HAVING AVG(safetyrating) < 3
+ORDER BY Rating, street;
+
+--12. Show the total number of lanes per street, but only streets with more than one lane.
+
+SELECT street,
+COUNT(street) AS Lanes_per_Street
+FROM CityBikeLanes
+GROUP BY street
+HAVING COUNT(street) > 1
+ORDER BY Lanes_per_Street desc, street;
+
+--13. Show all lanes where the last inspection found issues (join with CityMaintenance).
+
+SELECT L.street AS Street_Name,
+M.issues_found AS Issues,
+M.last_inspection
+FROM CityBikeLanes AS L
+INNER JOIN CityMaintenance AS M
+ON L.id = M.lane_ID
+WHERE M.issues_found IS NOT NULL;
+
+--14. List all streets with more than 1 complaint from CityComplaints.
+
+SELECT street,
+COUNT(street) AS Total_Complaints
+FROM Citycomplaints
+GROUP BY street
+HAVING COUNT(street) > 1
+ORDER BY Total_Complaints desc;
+
+--15. Find the streets with complaints but whose average safety rating is ≥ 4.
+
+WITH Streets AS (
+    SELECT street,
+    AVG(safetyrating) AS Rating
+    FROM CityBikeLanes
+    GROUP BY street)
+
+SELECT S.street AS Street_Name,
+S.Rating AS Rating,
+COUNT(C.complaint_type) AS Total_Complaints
+FROM Streets AS S
+INNER JOIN CityComplaints AS C
+ON S.street = C.street
+GROUP BY S.street
+HAVING S.Rating >= 4
+AND COUNT(C.complaint_type) >= 1
+ORDER BY Rating desc;
+
+--16. Show all lanes without any complaints.
+
+SELECT ID,
+street,
+protected
+FROM CityBikeLanes 
+WHERE street NOT IN(
+SELECT L.street 
+FROM CityBikeLanes AS L
+INNER JOIN CityComplaints AS C
+ON L.street = C.street)
+ORDER BY street;
+
+--17. Return all protected lanes that had at least one complaint in 2022.
+
+SELECT L.id,
+L.street,
+C.complaint_date
+FROM CityBikeLanes AS L
+INNER JOIN CityComplaints AS C
+ON L.street = C.street
+WHERE protected = 'yes'
+AND strftime('%Y', complaint_date) = '2022'
+ORDER BY L.street;
+
+--18. Get the 3 streets with the highest number of maintenance issues.
+
+SELECT L.street AS Street,
+COUNT(M.maintenance_id) AS Total_Issues
+FROM CityBikeLanes AS L
+INNER JOIN CityMaintenance AS M
+ON L.id = M.lane_id
+GROUP BY L.street
+ORDER BY Total_Issues desc
+LIMIT 3;
+
+--19. Use a CTE to find the top 5 streets by number of complaints, and select them sorted by complaint count.
+
+WITH Streets AS (
+    SELECT street
+    FROM CityBikeLanes
+    GROUP BY street)
+    
+SELECT S.street,
+COUNT(C.complaint_id) AS Number_of_Complaints
+FROM Streets AS S
+INNER JOIN CityComplaints AS C
+ON S.street = C.street
+GROUP BY S.street
+ORDER BY Number_of_Complaints desc
+LIMIT 5;
+
+--20. Use a CTE to calculate the average safety rating per year, then show only years with an average above 4.5.
+
+SELECT year_installed,
+ROUND(AVG(safetyrating), 1) AS Rating_per_Year
+FROM CityBikeLanes
+GROUP BY year_installed
+HAVING AVG(safetyrating) > 4.5
+ORDER BY year_installed;
+
+--21. Find all streets where the latest inspection was before 2022 AND they have no complaints.
+
+WITH Streets AS (
+    SELECT id,
+    street
+    FROM CityBikeLanes
+    GROUP BY street)
+
+SELECT S.street AS Street,
+MAX(M.last_inspection) AS Last_Inspection
+FROM Streets AS S
+INNER JOIN CityMaintenance AS M
+ON S.id = M.lane_id
+    LEFT JOIN CityComplaints AS C
+    ON S.street = C.street
+WHERE strftime('%Y', M.last_inspection) < '2022' 
+AND S.street NOT IN (SELECT C.street FROM CityComplaints)
+GROUP BY S.street;
+
+--22. List the streets where the average lane width is below the overall average width across all lanes.
+
+WITH Streets AS (
+SELECT street,
+AVG(width_feet) AS Width
+FROM CityBikeLanes
+GROUP BY street)
+
+SELECT street AS Street,
+Width
+FROM Streets
+WHERE Width < (SELECT AVG(Width) FROM Streets)
+ORDER BY Width;
+
+--23. Find the protected lanes that have not been updated since before 2021.
+
+SELECT id,
+street,
+year_updated
+FROM CityBikeLanes
+WHERE protected = 'yes'
+AND year_updated < 2021
+ORDER BY year_updated desc;
+
+--24. Show all streets that had faded paint complaints OR maintenance issues.
+
+WITH Street_Maintenance AS (
+    SELECT L.id AS id,
+    L.street AS street,
+    M.issues_found AS issues_found
+    FROM CityBikeLanes AS L
+    INNER JOIN CityMaintenance AS M
+    ON L.id = M.lane_id)
+    
+SELECT S.id AS ID,
+S.street AS Street,
+CASE 
+    WHEN S.issues_found = 'faded paint' AND C.complaint_type = 'faded paint'
+        THEN 'Maintenance & Complaint'
+    WHEN S.issues_found = 'faded paint' 
+        THEN 'Maintenance'
+    WHEN C.complaint_type = 'faded paint' 
+        THEN 'Complaint'
+    ELSE ''
+END AS Source
+FROM Street_Maintenance AS S
+LEFT JOIN CityComplaints AS C
+ON S.street = C.street
+WHERE S.issues_found = 'faded paint'
+OR C.complaint_type = 'faded paint';
+
+--25. Find the street(s) with the highest safety rating among unprotected lanes.
+
+WITH Unprotected AS (
+    SELECT street,
+    ROUND(AVG(safetyrating), 2) AS Rating
+    FROM CityBikeLanes
+    WHERE protected = 'no'
+    GROUP BY street)
+
+SELECT street AS Street,
+Rating
+FROM Unprotected
+WHERE Rating = (SELECT MAX(Rating) FROM Unprotected);
+
+--26. List the top 3 streets with the highest ratio of complaints to total lanes.
+
+WITH Streets AS (
+SELECT street,
+COUNT(id) AS Total_Lanes
+FROM CityBikeLanes
+GROUP BY street)
+
+SELECT S.street AS Street,
+S.Total_Lanes AS 'Total Lanes',
+(COUNT(C.complaint_id)*1.0/S.Total_Lanes) AS complaint_to_lane_ratio
+FROM Streets AS S
+INNER JOIN CityComplaints AS C
+ON S.street = C.street
+GROUP BY S.street
+ORDER BY complaint_to_lane_ratio desc
+LIMIT 3;
+
+--27. Get all streets where:
+    --The average safety rating is above 4
+    --AND the number of complaints is below the overall average.
+
+WITH Streets AS (
+    SELECT street,
+    ROUND(AVG(safetyrating), 2) AS Rating
+    FROM CityBikeLanes
+    GROUP BY street
+    HAVING AVG(safetyrating) > 4), 
+Number_of_Complaints AS (
+    SELECT street,
+    COUNT(Complaint_id) AS Total_Complaints
+    FROM CityComplaints
+    GROUP BY street)
+
+SELECT S.street,
+S.Rating,
+N.Total_Complaints
+FROM Streets AS S
+INNER JOIN Number_of_Complaints AS N
+ON S.street = N.street
+WHERE N.Total_Complaints < (SELECT AVG(Total_Complaints) FROM Number_of_Complaints);
+
+--28. Find the 3 most improved streets based on the difference between year_installed and year_updated.
+
+SELECT street,
+MAX(year_updated - year_installed) AS improvement_years
+FROM CityBikeLanes
+GROUP BY street
+ORDER BY improvement_years desc
+LIMIT 3;
+
+--29. I want to see every street ranked by the number of complaints per lane. Show me the street name, the ratio, and the rank.
+
+WITH Streets AS (
+    SELECT street,
+    COUNT (id) AS Lanes_per_Street
+    FROM CityBikeLanes
+    GROUP BY street)
+SELECT S.street,
+COUNT(C.complaint_id)*1.0 / Lanes_per_street AS Complaints_per_Lane,
+DENSE_RANK () OVER (ORDER BY COUNT(C.complaint_id)*1.0 / Lanes_per_street desc) AS Rank
+FROM Streets AS S
+LEFT JOIN CityComplaints AS C
+ON S.street = C.street
+GROUP BY S.street;
+
+--30. Create a nested query to return streets that have complaints but no maintenance issues.
+
+SELECT DISTINCT C.street
+FROM CityComplaints AS C
+WHERE C.street NOT IN (
+    SELECT L.street
+    FROM CityBikeLanes AS L
+    INNER JOIN CityMaintenance AS M
+    ON L.id = M.lane_id);
