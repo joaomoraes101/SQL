@@ -1,0 +1,581 @@
+--1. The CEO wants to know which countries are generating the most revenue.
+--Write a query that shows the total sales per country (using invoice totals), sorted from highest to lowest.
+--Then, explain in plain business terms which countries are the company’s strongest markets, and how this information could guide future marketing strategy.
+
+WITH Sales_by_Country AS (
+    SELECT C.Country, 
+    SUM(I.Total) AS Total_Revenue, 
+    ROUND(((100*SUM(I.Total)*1.0) / (SELECT SUM(Total) FROM invoices)), 1) || '%' AS Percentage_of_Sales 
+    FROM customers AS C 
+    LEFT JOIN invoices AS I 
+    ON C.CustomerId = I.CustomerId 
+    GROUP BY C.Country 
+    ORDER BY SUM(I.Total) desc) 
+    
+SELECT Country, 
+Total_Revenue, 
+Percentage_of_Sales, 
+ROUND(SUM(Percentage_of_Sales) OVER (
+    ORDER BY Total_Revenue desc, Country), 1) || '%' AS Cumulative_Percentage 
+FROM Sales_by_Country;
+
+--Explanation: 
+--As we can see, there is a very significant difference between countries' revenues. From the cumulative percentages we can see that the top 4 countries with biggest revenues are responsible for more than 50% of total revenue, so most of our marketing efforts should be focuse on these 4 countries: USA, Canada, France and Brazil.
+--Additionally, the top half of the countries which bring most revenue, bring 80% of it. As I see it, a moderate effort should be directed to market to the last 8 countries fo this group: Germany, UK, Czech Republic, Portugal, India, Chile, Hungary and Ireland.
+--The remaining 12 countries are responsible for only 20% of the revenue, even tho they are 50% of the countries. Our marketing efforts should cease in these countries to focus on the top half ones, and more especifically the top 4.
+--Of course, this analysis is incomplete, since I don't have information of marketing, shipping and administrative costs for these countries, Which actually defines profit, which is actually what we are interested in. So I can only do a partial analysis here.
+--In a real world scenario, my reccomendations would be useless unless I had that information. But that's the best I could do with what I had without straying away from the topic too much
+
+--2. The Head of Sales wants to know which music genres are driving revenue.
+--Write a query that shows the total sales per genre (using invoice totals from tracks purchased), sorted from highest to lowest.
+--Then, provide a short business explanation:
+    --A) Which genres should the company double down on?
+    --B) Are there genres that might be underperforming and worth reconsidering for future investment?
+
+WITH Sales_by_Genre AS(
+    SELECT G.Name AS Genre_Name, 
+    SUM(T.UnitPrice*IT.Quantity) AS Revenue_per_Genre, 
+    ROUND(((100*SUM(T.UnitPrice*IT.Quantity)*1.0) / (SELECT SUM(Total) FROM invoices)), 1) AS Percentage_of_Total 
+    FROM genres AS G 
+    INNER JOIN tracks AS T 
+    ON G.GenreId = T.GenreId 
+        INNER JOIN invoice_items AS IT 
+        ON T.TrackId = IT.TrackId 
+            INNER JOIN invoices AS I 
+            ON I.invoiceId = IT.InvoiceId 
+    GROUP BY G.Name 
+    ORDER BY Revenue_per_Genre desc)
+    
+SELECT Genre_Name, 
+Revenue_per_Genre, 
+Percentage_of_Total || '%' AS 'Percentage of Total', 
+ROUND(SUM(Percentage_of_Total) OVER (
+    ORDER BY Revenue_per_Genre desc), 1) || '%' AS 'Cumulative Percentage' 
+FROM Sales_by_Genre;
+
+--Explanation: 
+--The results of this table show how just a few genres, more especifically 4 genres, drive most of the revenue. If we take the pareto law, saying 80% of results come from 20% of efforts, and we apply this to the genres, we see that 6 genres (25% of 'efforts') bring more than 80% of revenue.
+--More realistically though, the company should be focusing on the first 4 genres and drop investing on the rest. And that's because there's quite a big jump from the revenue percentage of number 4 'Alternative & Punk' (10.4%) to number 5 'Tv Shows' (4.0%). This means we reduce the 'effort' to 16.67%, and revenue changes much less to still 73.5%.
+--Focusing on the top 6 is already great, and fits Pareto Law, but by focusing on the top 4, we can cut 'effort' almost by half, and revenue won't even drop 10%. But the catch is, we won't be losing almost 10% of the money, because the investment made in all the other genres will be reinvested into the ones bringing most revenue, meaning we will be making money more efficiently this way, and revenue will tend to increase significantly with same costs.
+
+--3. The Marketing Director wants to understand which artists are bringing in the most money.
+--Write a query that shows the total sales per artist (based on all track purchases), sorted from highest to lowest.
+--Then explain in business terms:
+    --A) Which artists are the company’s cash cows (top earners)?
+    --B) Do you notice any concentration risk (too much revenue relying on too few artists)?
+    --C) How might marketing and partnership strategies shift based on this?
+
+WITH Sales_by_Artist AS (
+    SELECT AR.Name AS Artist_Name, 
+    ROUND(SUM(T.UnitPrice*IT.Quantity), 2) AS Revenue_per_Artist, 
+    ROUND(((100*SUM(T.UnitPrice*IT.Quantity)*1.0) / (SELECT SUM(Total) FROM invoices)), 2) AS Percentage_of_Total 
+    FROM artists AS AR
+    INNER JOIN albums AS AL
+    ON AR.ArtistId = AL.ArtistId
+        INNER JOIN tracks AS T
+        ON AL.AlbumId = T.AlbumId
+            INNER JOIN invoice_items AS IT
+            ON T.TrackId = IT.TrackId
+                INNER JOIN invoices AS I
+                ON IT.InvoiceId = I.InvoiceId
+    GROUP BY AR.Name
+    ORDER BY Revenue_per_Artist DESC)
+    
+SELECT Artist_Name AS Artist,
+'$' || Revenue_per_Artist AS 'Revenue per Artist',
+Percentage_of_Total || '%' AS 'Percentage',
+ROUND(SUM(Percentage_of_Total) OVER (
+    ORDER BY Revenue_per_Artist desc), 2) || '%' AS 'Cumulative Percentage' 
+FROM Sales_by_Artist;
+
+--The company's cash cows are the top 5, with percentages of contribuition between 6% and 3.5%. All the other artists below differ gradually from one another, with many sharing the same percentage of revenue. The top 5 are responsible for more than 20% of the revenue, even though they account for only 3% of the amount of artists.
+--That said, that's not a big enough number to confidently decide on focusing only on these artists, since the rest of the artists contribute significantly to the revenue when put together, meaning no concentration risk has been detected. For example, From number 7 to 30, there's a contribution between 2% and 1%, and from 31 to 62, between 1% and 0.5%. It requires position 135 to reach a less than 0.1% contribution to the revenue. As you can see, the contribution is widely spread between all artists, some contributing more, some less, but no significant jump can be seen besides after top 5.
+--If I were to suggest relocating the budget it would have to be after 0.5% contribution to revenue. That's position 62. Meaning we'd save spending on 62.4% of the artists, while only losing less than 20% of revenue. The money save should be reinvested on the top 5.
+--Since too much revenue IS NOT necessarily relying on a specific group, but instead it's spreawd across all artists relatively evenly, my suggestion is to focus on those with bigger contributions.
+
+--4. The Finance Department wants to know which customers are the most valuable to the company.
+--Write a query that shows the top 10 customers by total revenue spent (based on invoices).
+--Then explain in business terms:
+    --A) Who are the VIP customers?
+    --B) How might the company treat these customers differently (e.g., loyalty programs, special offers)?
+
+WITH Sales_by_Customers AS (
+    SELECT C.FirstName || ' ' || C.LastName AS Name,
+    I.CustomerId,
+    C.Country,
+    COUNT(I.InvoiceId) AS Orders,
+    ROUND(SUM(I.Total), 2) AS Revenue_per_Customer,
+    ROUND(100*SUM(I.Total)*1.0 / (SELECT SUM(Total) FROM invoices), 2) AS Contribution
+    FROM customers AS C
+    INNER JOIN invoices AS I
+    ON C.CustomerId = I.CustomerId
+    GROUP BY C.FirstName || ' ' || C.LastName)
+    
+
+SELECT Name,
+Country,
+Orders,
+'$' || Revenue_per_Customer AS 'Revenue per custotmer',
+Contribution || '%' AS 'Contribution %',
+ROUND(SUM(Contribution) OVER (ORDER BY Revenue_per_Customer DESC, CustomerId), 2) || '%' AS'Cumulative %'
+FROM Sales_by_Customers
+;
+
+--Besides the usual Revenue per Customer, Percentage of Contribution and Cumulative Percentage, I have also selected the country and number of order per customer, in order to find any patterns that would indicate more orders and revenue per location, and also revenue per order.
+--What I noticed (And off the books because this is not a real database for a real company) is that 58 customer out of 59 purchased the same amount, 7 times, and the one that didnt purchased 6. Besides that, The top spender spent $49.62 while the bottom $36.64. This means there really isn't a pattern worth exploring here. Every customer has given a significant and similar contribution to the revenue.
+--This means I wouldnt reccomend any change in investment here, or change in marketing strategy. And it also means selecting the top 10 as "VIPs" has little effect since the numbers are so similar. To illustrate this, the position 30, which represents above 50% of customers, has contributed a cumulative total of 53.18% to revenue, meaning there really isn't, for any practical terms, any "VIP" customers so far.
+
+--5. The Content Team wants to know which albums are generating the most revenue.
+--Write a query that shows the top 10 albums by total sales revenue, along with the artist name and total revenue.
+--Then explain in business terms:
+    --A) Which albums are the company’s blockbusters?
+    --B) Do you notice any patterns in top-performing albums (e.g., genre, artist concentration)?
+    --C) How could this influence decisions on promotion or catalog expansion?
+
+WITH Sales_by_Album AS (
+    SELECT A.Title AS Album_Name,
+    AR.Name AS Artist_Name,
+    G.Name AS Genre_Name,
+    IT.InvoiceLineId,
+    ROUND(SUM(T.UnitPrice*IT.Quantity), 2) AS Revenue_per_Album, 
+    ROUND(((100*SUM(T.UnitPrice*IT.Quantity)*1.0) / (SELECT SUM(Total) FROM invoices)), 2) AS Percentage_of_Total 
+    FROM albums AS A
+    INNER JOIN tracks AS T
+    ON A.AlbumId = T.AlbumId
+        INNER JOIN invoice_items AS IT
+        ON T.TrackId = IT.TrackId
+            INNER JOIN invoices AS I
+            ON IT.InvoiceId = I.InvoiceId
+                LEFT JOIN artists AS AR
+                ON A.ArtistId = AR.ArtistId
+                    LEFT JOIN genres AS G
+                    ON T.GenreId = G.GenreId
+    GROUP BY A.AlbumId
+    ORDER BY Revenue_per_Album DESC)
+    
+SELECT Album_Name AS Album,
+Artist_Name AS Artist,
+Genre_Name AS Genre,
+'$' || Revenue_per_Album AS 'Revenue per Album',
+Percentage_of_Total || '%' AS 'Percentage',
+ROUND(SUM(Percentage_of_Total) OVER (
+    ORDER BY Revenue_per_Album desc, InvoiceLineId), 2) || '%' AS 'Cumulative Percentage' 
+FROM Sales_by_Album;
+
+--Even though, there's is a perceivable, yet not too significant, different between the top performing albums in terms of revenue comparing to the rest, the slope is not steep at all. The top 10 albuns are respnsible for about 11% of the total revenue, while accounting for a little more than 3% of the total amount of albuns. This line though, could have been drawn really anywhere though, since the percentage contribution of position 10 is 0.94% while position 11 is 0.85%, not too different.
+--I wouldn't say there are clear top performers in terms of albuns, but a line could definitely be drawn after 80% of revenue, as always, where about a little more than 50% of albuns together bring to the company, but again this line is very subjective. If budget is cut for the 50% underperforming albuns, it could be redistributed for all the top 50% performers. Results wouldn't change too much, not too significantly, but there's definitely be an increse in revenue doing so, however slightly.
+--There are no clear patterns for Genre or Artist, but it doesn't mean there are no better performers. It needs to be noted that the artist "Lost" appears 3 times among the top 15 albuns, followed by "Battlestar Galactica" appearing 2 times. The rest appears only once. In terms of Genres, "TV Shows" come up 4 times among the top 15, followes by "Rock" which appears 3 times, but all of them after position 10. I believe it would be benefitial to destinate a small part of the reinvested budget on TV SHOWS, Not only they are top performers, but Battlestar Galactica, the top Album, appears twice in the top 15 and once without its genre being "Tv Shows". With that in mind, it's safe to assume about a third of all the top performing albuns belong to the genre "TV SHOWS", and any other pattern cannot be seen.
+--Promotion could be focused more on TV SHOWS since streaming is an industry growing every year, and the company could surf more on these waves while they last.
+
+--6. The Sales Director wants to know which customers spent more than the average customer in their country.
+--Write a query that shows: Customer name, Country, Their total spending, The average spending in that country
+--Then explain in business terms:
+    --A) Which countries have the biggest above-average spenders?
+    --B) How might this insight shape localized marketing or loyalty programs?
+
+WITH Higher_Than_Average_Customers AS (
+    WITH Sales_by_Customer AS (
+        SELECT C.FirstName || ' ' || C.LastName AS Customer,
+        C.Country,
+        C.CustomerId,
+        SUM(I.Total) AS Total_per_Customer
+        FROM customers AS C
+        INNER JOIN invoices AS I
+        ON C.CustomerId = I.CustomerId
+        GROUP BY C.CustomerId, C.Country)
+    
+    SELECT Customer,
+    Country,
+    ROUND(Total_per_Customer - AVG(Total_per_Customer) OVER (
+        PARTITION BY Country), 2) AS APCCC --(Average per Country Customer Comparison)
+        FROM Sales_by_Customer
+    ORDER BY Country, APCCC Desc)
+    
+SELECT Customer,
+Country,
+'$' || APCCC AS APCCC
+FROM Higher_Than_Average_Customers
+WHERE APCCC > 0
+ORDER BY APCCC desc;
+
+--First of all, I have taken a screenshot of the final table with only the spenders for each country that have spent more than the average. But this table only won't give us all the valuable information we need. In order to make better informed decisions, we need to look into the table with all the spenders (The one within the outer WITH statement)
+--Looking into this new table, we can see countries with only one customer can be removed from the analysis, since their spending equals the average and therefore are not useful for this analysis. That includes 15 out of 24 countries. The UK has 3 customers but all spent the same amount, so no outliers. It can also be removed from count. That leaves us with 8 countries to consider for localized marketing strategy. I'll go a step further and remove from the analysis the countries with only 2 customers since the sample size is not big enough to make any decisions, since the distance from each of these customers to the average is the same and therefore a pattern is not clear to be observed. This leaves us with only 5 Countries: Brazil, Canada, France, Germany and USA.
+--For each of these countries, the big spenders (Higher than country average) are: - Brazil: 20% (of total number of customers) - Canada: 25% - France: 40% - Germany: 25% - USA: 30%
+--What we can notice here is that for all the countries with more than 2 customers, only a small pecentage of those customers spend enough to balance the average agains the majority, those customers are more susceptible to buying from the company than your average Joe, and the Marketing department should try to understand what they have in common for a directed marketing strategy for these types of people.
+--In terms of dividing the strategy by country, the USA should have biggest priority in budget, since all it's for Top buyers are part of the top 6, out of all 13 top buyers from all countries, and the top buyer of all is american. Brazil, Canada and France should receive the least priority of all, since their top buyers are very close to the average and a clear patterns cant really be identified. Germany should receive second priority and Czech Republic, even though removed from analysis for only having two customers, should be looked into and explored, for having the second highest top spender.
+--That said, the divergence from the average is really not too significant, meaning it's up to the Marketing Department to really judge whether localized marketing or loyalty programs are really worth the cost to set those programs up.
+
+--7. The Finance team wants to identify genres that underperform compared to the global average revenue per track.
+--Write a query that shows: Genre name, Average revenue per track in that genre, Global average revenue per track (for comparison)
+--Then explain in business terms:
+    --A) Which genres are falling behind?
+    --B) Should the company phase them out, improve them, or keep them for catalog diversity?
+
+WITH Final AS (
+    WITH Revenue_per_Track AS (
+        SELECT G.Name AS Genre_Name,
+        T.Name AS Track_Name,
+        SUM(IT.UnitPrice*IT.Quantity) AS Total_per_Track
+        FROM genres AS G
+        INNER JOIN tracks AS T
+        ON G.GenreId = T.GenreID
+            INNER JOIN invoice_items AS IT
+            ON T.TrackId = IT.TrackId
+            GROUP BY T.TrackId
+        ORDER BY Total_per_Track desc)
+
+    SELECT Genre_Name,
+    ROUND(AVG(Total_per_Track), 2) AS Average_Track_Revenue,
+    ROUND(AVG(Total_per_Track), 2) - (
+        WITH Total_Revenue_per_Track AS (
+            SELECT G.Name AS Genre_Name,
+            T.Name AS Track_Name,
+            SUM(IT.UnitPrice*IT.Quantity) AS Total_per_Track
+            FROM genres AS G
+            INNER JOIN tracks AS T
+            ON G.GenreId = T.GenreID
+                INNER JOIN invoice_items AS IT
+                ON T.TrackId = IT.TrackId
+            GROUP BY T.TrackId
+            ORDER BY Total_per_Track desc)
+    
+        SELECT ROUND(AVG(Total_per_Track), 2) AS Average_Revenue_per_Track
+        FROM Total_Revenue_per_Track) AS Comparison_With_Global_Track_Average
+        FROM Revenue_per_Track 
+    GROUP BY Genre_Name
+    ORDER BY Comparison_With_Global_Track_Average desc)
+
+SELECT Genre_Name,
+Average_Track_Revenue,
+Comparison_With_Global_Track_Average,
+CASE 
+    WHEN Comparison_With_Global_Track_Average > 0.06 THEN 'Reinvest In'
+    WHEN Comparison_With_Global_Track_Average < -0.13 THEN 'Phase Out'
+    WHEN Comparison_With_Global_Track_Average < -0.06 THEN 'Catalog Diversity'
+    ELSE 'Improve'
+END AS 'Recommendation'
+FROM Final
+ORDER BY Comparison_With_Global_Track_Average desc;
+
+--Considering the Global Average Revenue per Track as $1.17, I will use an arbitrary range of +- 5% from the average to consider these Genres with an Average revenue per track of more or less than $0.06 as effectively Average and neither performing well or not.
+--I have used two tables here for the analysis: 1. Table with only the ones falling behind with more than 5% negative (Average_Track_Revenue < $1.11). 2. Another with all the Genres, averages and comparisons, and also another column with my recommendations.
+--Here are my reasons for the recommendations:
+--'Reinvest In': We can clearly see which genres drive the revenue, the top 5, all with averages between $1.22 and $0.82, averaging around 185% of the Global Average Value. The reason these are on the 'Reinvest In' Recommendation section is because they have by far the biggest potential to increase sales, as position 6 of the list is only above average by a mere $0.02, basically on the average. The big dip between position 5 and 6 indicate different tiers of Genre Results.
+--'Improve': The Genres inside the range I considered as Average (+-5%) are not doing bad and have potential, perhaps if we were to improve them, there wouldn't be such a huge gap between the top performers and these genres, meaning the company wouldn't be so dependent on a few genres only, reducing the risk of being too affected in case those genres start underperforming. Perhaps exploring and testing albums and Tracks trending at the moment (Belonging to these genres) would be a good idea.
+--'Catalog Diversity': These are genres below the average range, and are underperformers but not too much that we have to cut them completely. Having diversity of genres within the company can eventually allow us to surf a wave of trends we weren't expecting. Diversifying is always a good idea in business, it allows protection against unexpected events, and since their average revenue is not too far from the Global average, it's worth keeping them around.
+--'Phase Out': These are the bottom 5 Genres, and while they don't tray away from the average too much, there's a clear difference of $0.05 between position 19 ($1.04) and 20 ($0.99) which had been decreasing quite gradually before. All bottom 5 genres also have the same Average. Gradually removing these genres from our catalog could prove beneficial in the long term. The difference is not too much as explained before, not like the top 5 comparing to number 6, but they aren't many and removing them shouldn't affect safety or revenue too much, especially if we reinvest it's budget on the top 5.
+
+--8. The Marketing team wants to know which sales agents (employees) manage customers who spend above the global average.
+--Write a query that shows: Sales Agent name, Customer name, Customer total spending, Global average customer spending (for comparison)
+--Then explain in business terms:
+    --A) Which agents have the most high-value customers?
+    --B) Should incentives or bonuses be shifted toward these agents?
+
+WITH Final AS (
+    WITH Revenue_per_Customer AS (
+        SELECT C.FirstName || ' ' || C.LastName AS Customer,
+        SUM(I.Total) AS Total_per_Customer,
+        E.FirstName || ' ' || E.LastName AS Sales_Rep,
+        E.EmployeeId AS Id
+        FROM employees AS E
+        INNER JOIN customers AS C
+        ON E.EmployeeId = C.SupportRepId
+            INNER JOIN invoices AS I
+             ON C.CustomerId = I.CustomerId
+         GROUP BY C.CustomerId),
+         Global_Average AS (
+         SELECT Customer,
+         Sales_Rep,
+         Id,
+         Total_per_Customer,
+         ROUND(AVG(Total_per_Customer) OVER (), 2) AS Customer_Global_Average
+         FROM Revenue_per_Customer)
+    
+    SELECT Sales_Rep,
+    Customer,
+    Total_per_Customer,
+    Customer_Global_Average,
+    Total_per_Customer - Customer_Global_Average AS Comparison
+    FROM Global_Average
+    ORDER BY Comparison desc)
+    
+SELECT Sales_Rep,
+ROUND(AVG(Total_per_Customer), 2) Average_Revenue_per_Rep,
+Customer_Global_Average,
+ROUND(AVG(Total_per_Customer), 2) - Customer_Global_Average AS Comparison
+FROM Final
+GROUP BY Sales_Rep
+ORDER BY Comparison desc;
+
+--Tables used: 1. Comparing each customers total spend against the global average (This query is inside the query for second table AS Final) 2. Average of customers spending grouped by sales rep and comparing the spending against the Global Average
+--The standard deviation for the results is about $2.80, that means +-7% of the Global average. Using 1 standard deviation as the range for the Average, we can see from table 2 that neither employee is even close to the standard deviation limit, and are all basically fluctuating around the average. Steve Johnson is the leader with $0.54 above average, a mere $0.34 above Jane Peacock. Margaret Park is the only one below average being $0.70 below, still 25% of the way to the standard deviation, so not at all significant.
+--With this in mind, there are no employees with positive enough results to justify incentives or bonuses, or negative enough to justify replacing sales reps. They are all doing pretty much equally. Perhaps though, the lack of incentives and bonuses through healthy competition is what's causing these employees to not do "more than necessary", so that's something to consider.
+--Now, the reason I looked into the averages between sales reps themselves is because looking at only the table with all customers can be misleading since Steve Johnson appears 5 times among top 10, Jane Peacock 4 and Margaret Park only 1. This could be misleading and quite unfair torwards Margaret, who has much better results than what appears from this table only
+
+--9. The Sales Director wants to understand revenue trends over time per sales agent.
+--Write a query that shows, for each year and sales agent: Sales Agent name, Year, Total revenue that year (sum of their customers’ invoices), Difference compared to the previous year (growth/decline)
+--Then explain in business terms:
+    --A) Which agents show consistent growth over time?
+    --B) Which agents are stagnating or declining?
+    --C) Should training or reassignment be considered based on these trends?
+
+WITH Sales_Rep_Results AS (
+    SELECT E.FirstName || ' ' || E.LastName AS Sales_Rep,
+    CAST(strftime('%Y', I.InvoiceDate) AS INTEGER) AS Year,
+    I.Total AS Revenue
+    FROM employees AS E
+    INNER JOIN customers AS C
+    ON C.SupportRepId = E.EmployeeId
+        INNER JOIN invoices AS I
+        ON C.CustomerId = I.CustomerId)
+        
+SELECT Sales_Rep,
+Year,
+SUM(Revenue) AS 'Yearly Revenue',
+ROUND(SUM(Revenue) - LAG(SUM(Revenue)) OVER (PARTITION BY Sales_Rep ORDER BY Year), 2) AS 'Previous Year Comparison'
+FROM Sales_Rep_Results
+GROUP BY Sales_Rep, Year
+ORDER BY Sales_Rep, Year;
+
+--Besides the table, I also generated a chart with each sales rep's revenue per year. Let's talk about each employee separately.
+--Even though Steve Johnson held the highest postion when I investigated which sales reps served the customers reponsible for the highest revenue for the company, in total, he sold the least among all three employees. The advantage of an employee such as Steve is that he is consistent and trustworthy, and while appearing like he just doesn't work as much as the others, or sell as much as the others, he was responsible for the customers spending most money inside the company. Steve is an interesting case, since I don't know him personally I can only assume 3 different scenarios: 1. It seems he can be very convincing to a certain type of person, but doesn't appear convincing at all to others. Perhaps he would benefit from training in understanding different personalities and ways for dealing with each of them. 2. Steve is lazier than other employees and quite the prodige. Perhaps he has a higher IQ than average and has always achieved good results with minimum effort, which has never given him the reason to work hard. In this case, he probably needs to be given challenges as incentives. 3. There's something else going on in this life that's more important than work, and it needs to be investigated if we are to act accordingly.
+--Jane Peacock is perhaps a great example of the classic employee that enters a company very excited and wiling to prove hereself. After a year learning what is what, with mediocre results, she exceeds every other employee by a huge margin in her second year, only to decrease her results over the years. Perhaps she noticed working harder and giving more results don't necessarily mean higher salary or more acknowledgement. If that's the case, it should be investigated what she seeks by working harder: More money, promotion, acknowledgement, etc. And perhaps it's possible to offer her incentives to return the results she was given in the beginning.
+--Margaret Park was a mediocre to below average employee back in the first years of her employment. But in the last 2 years she has been first place in sales among all reps. I don't know what you've been doing for her to be so pumped up, but keep doing it, and perhaps reward her so she can see her hard work pays off.
+
+--10. The Product team wants to know which genres are gaining or losing momentum year-over-year.
+--Write a query that shows: Genre name, Year, Total revenue for that genre and year, Difference from the previous year (growth/decline)
+--Then explain in business terms:
+    --A) Which genres are on the rise and worth reinvesting in?
+    --B) Which genres are declining and might need rethinking?
+    --C) Are there any stable performers that form the backbone of revenue?
+
+WITH Final AS (
+    WITH Genre_Results_per_Year AS (
+        SELECT G.Name AS Genre,
+        CAST(strftime('%Y', I.InvoiceDate) AS INTEGER) AS Year,
+        ROUND(SUM(IT.UnitPrice*IT.Quantity), 2) AS Revenue_per_Genre_per_Year
+        FROM genres AS G
+        INNER JOIN tracks AS T
+        ON G.GenreId = T.GenreId
+            INNER JOIN invoice_items AS IT
+            ON T.trackId = IT.TrackId
+                INNER JOIN invoices AS I
+                ON I.InvoiceId = IT.InvoiceId
+        GROUP BY G.Name, CAST(strftime('%Y', I.InvoiceDate) AS INTEGER))
+    
+    SELECT Genre,
+    Year,
+    Revenue_per_Genre_per_Year,
+    SUM(Revenue_per_Genre_per_Year) OVER (PARTITION BY Genre) AS Total_per_Genre,
+    ROUND(Revenue_per_Genre_per_Year - LAG(Revenue_per_Genre_per_Year) OVER (PARTITION BY Genre ORDER BY Year), 2) AS Previous_Year_Comparison
+    FROM Genre_Results_per_Year
+    ORDER BY Genre, Year)
+    
+SELECT Genre,
+Year,
+Revenue_per_Genre_per_Year AS 'Revenue per Genre per Year',
+Previous_Year_Comparison AS 'Pervious Year Comparison'
+From Final
+WHERE Total_per_Genre > 90
+ORDER BY Total_per_Genre;
+
+--Since there are 24 Genres, the initial Chart looks very confusing. On statistical terms, it doesn't makes sense to analyse every single genre, most of them have a maximum of only a few purchases per year, if not one or 2. This means the results hold no statistical relevance to study patterns related to them. Since the results are so many though, I thought better to show in a chart rather than a table. The most relevant chart and table though, show only the most important genres for this analysis.
+--When looking at the chrat though, it's easy to see 3 groups of genres: 1. Sporadical: 1 or 2 purchases a year, irregular and few. 2. Consistent: These are are the Genres always bringing significant amount of revenue per year, and with enough sales to make it somewhat statistically relevant. The criteria used is more than 3 years with revenue higher than $20. Looking at the results of the table that means a total revenue of $90 across all years. 3. The Boss: Rock is the main genre bringing revenue to the company and is clearly on a different tier than the other, since it's revenue accounts for more than 30% of the company's revenue.
+--For this analysis we will only focus only on Consistent Genres and the Boss, which are the only ones where company time and resources invested in improving them would result in significant changes in revenue. With that in mind, and noticing that 5 out of 24 is around 20% of all genres, and their revenue is very close to 80% of all revenue the company generates, we can use the Pareto Principle to focus on making changes to the 20% of assets bringing 80% of results. Let's analyse each Genre:
+--Rock: It's the backbone of revenue, and it's presenting a slow but steady increase in sales over the years. Although, this increase is not steep enough to clearly present a trend. The good news is it is consistent. An investment here doesn't necessarily mean it will be good, it might actually have the opposite effect since more money spent in it without clear indication of a higher demand will decrease profits.
+--Latin: This genre has been surprisingly steady and horizontal throughout the years. There was a dip in 2012 but since 2013 it returned to its expected results, the dip was probably caused by a specific event, instead of a trend. No investments suggested here.
+--Metal: this genre is particularly interesting because it has changed quite a bit over the past few years. Clearly it was appearing to disapper from popularity between 2009 and 2011, but it picked up in 2012 strongly and kept a similar result in 2013. I'd suggest not investments now, but instead to keep a look for 2014 to identify if the trend will keep strong and growing. If so, we might benefit from realocating budget to this genre.
+--Alternative & Punk: This genre is not perfectly steady, but it's mean line is horizontal and doesn't indicate any trends, up or down. It seems year in year out it has highs and lows. No changes suggested here.
+--TV Shows: A very particular genre, from 2010 till 2012, it maintained very consistent numbers, but in 2013 it drastically went down, cut by half. At first, we could have mistakenly assumed TV Shows aren't a trend anymore, but that would have been inaccurate. What has probably happened is people are relying more and more on streaming services such as Netflix to watch TV Shows, instead of buying them separately, and platforms such as Spotify and Youtube for soundtracks of these Shows. I'd suggest either transforming the business model around TV Shows to fit the trend, OR cutting them completely because it doesn't look like this approach will improve in the future for the company, quite the opposite
+
+--11. Identify the top 3 customers by total revenue for each year.
+--Show: Year, Customer name, Total revenue that year, Rank within the year
+--And then in business terms:
+    --A) Who are the loyal high spenders across multiple years?
+    --B) Do new high spenders appear, or is it always the same customers?
+
+WITH Final AS (
+    WITH Customer_Revenue_per_Year AS (
+        SELECT C.FirstName || ' ' || C.LastName AS Customer,
+        CAST(strftime('%Y', I.InvoiceDate) AS INTEGER) AS Year,
+        ROUND(SUM(I.Total), 2) AS Revenue_per_Customer_per_Year
+        FROM customers AS C
+        INNER JOIN invoices AS I
+        ON C.CustomerId = I.CustomerId
+        GROUP BY C.FirstName || ' ' || C.LastName, CAST(strftime('%Y', I.InvoiceDate) AS INTEGER))
+
+    SELECT Customer,
+    Year,
+    Revenue_per_Customer_per_Year,
+    ROW_NUMBER () OVER (PARTITION BY Year ORDER BY Revenue_per_Customer_per_Year desc) AS Rank
+    FROM Customer_Revenue_per_Year
+    ORDER BY Year, Revenue_per_Customer_per_Year desc, Customer)
+    
+SELECT Customer,
+Year,
+Revenue_per_Customer_per_Year AS Revenue,
+Rank
+FROM Final
+WHERE RANK <=3;
+
+--Since sometimes you get customer spending the same amount of money in the same year, I chose to rank them based on alphabetical order. Since you asked for the top 3, and not the top 3 values of revenue per customer per year, I believe that while not completely fair, alphabetical order is a way we can allocate them. In fact there's no REALLY FAIR way to choose the top 3, but it doesn't matter for this analysis, since what you are looking for is 3 people for each year to think of strategies to retain.
+--Here are the top spenders of each year: 2009: Dominique Lefebvre Leonie Köhler Tim Goyer 2010: Ladislav Kovács 2011: Hugh O'Reilly 2012: Richard Cunningham 2013: Helena Holý
+--Something interesting to notice is that even when checking the top 3 of each year, and not only top spenders, you don't see any repeated names. And as much as this appears to be a good thing, meaning getting new customers every year. The hidden story here is that the top spenders of previous years are not spending as much in the next years. The question is: "why?"
+--Only by contacting those customers we would be able to understand the real reason why they stopped spending as much. So the first step I'd suggest is contacting them. Now, based on their answers, there are some likely scenarios we can anticipate:
+--1. They are not happy with the products: In this case, it's important to truly understand the reason and after that brainstorm if it's really beneficial to make the changes requested, meaning if it's financially worth it for the company.
+--2. They haven't yet needed to buy anything else: In which case, the R&D team should create a product or service that the client will need more frequently, which increases the lifetime value of the customer, and if that increases by many times, so does the revenue.
+--3. They found a better company to buy from: In which case, we need to understand which company(s) that is, and figure out what they are doing differently, by perhaps, act as a customer and purchase from them.
+--4. The company has zero or poor customer retention strategies: In which case, the marketing department should brainstorm ways to improve customer retention strategies by perhaps creating an advertising campaing targeting only past customers, by offering a discount, or some other value.
+--Either way, solving this issue has the possibility to increse revenue by many times, since we are increasing lifetime customer value, one of the most important metrics for a business, along with Cost of Goods
+
+--12. The Retention Team wants to see how customer ranks change year-to-year.
+--Write a query that shows: Customer name, Year, Total revenue that year, Rank among all customers that year, Difference in rank compared to the previous year
+--Then explain in business terms:
+    --A) Which customers are climbers (improving rank each year)?
+    --B) Which are fallers (dropping in rank)?
+    --C) Which are stable?
+    --D) How could these insights shape retention or loyalty programs?
+
+WITH Final AS (
+    WITH Revenue_per_customer AS (
+        SELECT C.FirstName || ' ' || C.LastName AS Customer,
+        CAST(strftime('%Y', I.InvoiceDate) AS INTEGER) AS Year,
+        SUM(I.total) AS Revenue
+        FROM customers AS C
+        INNER JOIN invoices AS I
+        ON C.CustomerId = I.CustomerId
+        GROUP BY C.FirstName || ' ' || C.LastName, CAST(strftime('%Y', I.InvoiceDate) AS INTEGER))
+    
+    SELECT Customer,
+    Year,
+    Revenue,
+    DENSE_RANK() OVER (PARTITION BY Year ORDER BY Revenue desc) AS Rank
+    FROM Revenue_per_customer)
+    
+SELECT Customer,
+Year,
+Revenue,
+Rank,
+LAG(Rank) OVER (PARTITION BY Customer ORDER BY Year) - Rank AS Comparison
+FROM Final
+ORDER BY Customer, Year;
+
+--Since there are so many customers and the definition for what climbers, fallers, and stables are can be quite subjective and arbitrary, I defined that to be a climber or faller there needs to be a gradual trend, not necessarily always going up or down, but actually if its a climber and it goes down in the middle, never more than 2 positions. Same for Fallers, but opposite. A trend is also defined by at least three numbers in a row going the same direction (or within range), without the first or last number breaking the sequence. For stables, it needs a 2 position range and no year can have a position out of it. If someone have been stable, they cant be climbers or fallers, meaning if there is an increase of only 2 numbers between 3 years, that's not a trend. The definition is arbitrary, but it gives us an idea of what we want. Additionally, since there are too many customers, I have decided not to include any screenshots here due to the total of 232 lines.
+-- - Climbers: No one - Fallers: Alexandre Rocha, Bjorn Hansen, Dominique Lefebvre, Frank Ralston, Hannah Schneider, Ladislav Kovacs, Leonie Kohler, Luis Rojas, Luis Goncalves - Stables: Lucas Mancini
+--As we can observe clearly, there are way more fallers than Stables and Climbers. In fact, no one qualifies as a climber, meaning if someone starts purchasing less, chances are they will never purchase more in a gradual growth. Perhaps retention programs should focus more on first-purchase clients. For example, give them discounts for the second year, etc. The profit will be reduced for each sale, but the revenue will multiply, and the Lifetime customer value will increase, and that's the important metric for the business.
+--The opposite is also true, customers that start by spending most, lose enthusiasm and slowly stop spending. It's interesting how many follow the same path. This could be due to low confidence in the product, or its quality. I'm not sure whether that's for the retention team to deal with, but it's worth investigating by perhaps contacting these clients.
+--That said, the ratio of Fallers to total customers is quite low, being around 15% of the total. While increasing lifetime customer value for these clients will improve results, nothing confirms it will be significant.
+--The only Stable customer is probably just an expected statistical consequence of the 85% random position changes. There aren't really any extra patterns that can be explored for the rest.
+
+--13. How much revenue does each customer generate on average per purchase, and how does this vary year by year?
+--For each customer and each year, calculate: Total revenue generated, Total number of purchases (invoices), The average value per purchase
+--Then analyze how this average changes year by year, identifying patterns or outliers.
+--We want to understand not just how much each customer spends each year, but how they spend — i.e., do they buy often with small amounts, or do they make a few large purchases?
+--How do individual customers' spending behaviors shift over time?
+--Do they make more frequent purchases at lower value, or fewer big ones?
+
+WITH Final AS (
+    SELECT C.FirstName || ' ' || C.LastName AS Customer,
+    CAST(strftime('%Y', I.InvoiceDate) AS INTEGER) AS Year,
+    ROUND(SUM(I.Total), 2) AS Total_Revenue,
+    COUNT(I.InvoiceId) AS Orders,
+    ROUND(AVG(I.Total), 2) AS Value_per_Purchase,
+    COUNT(C.FirstName || ' ' || C.LastName) OVER (PARTITION BY C.FirstName || ' ' || C.LastName) AS Times
+    FROM customers AS C
+    INNER JOIN invoices AS I
+    ON C.CustomerId = I.CustomerId
+    GROUP BY C.CustomerId, CAST(strftime('%Y', I.InvoiceDate) AS INTEGER)
+    HAVING COUNT(I.InvoiceId) >= 2
+    ORDER BY Customer, Year)
+    
+SELECT Customer,
+Year,
+Total_Revenue,
+Orders,
+Value_per_Purchase
+FROM Final
+WHERE times > 2;
+
+--For the sake of filtering out unimportant data, I have decided to only give importance to years where a customer purchased more than one time, because otherwise it can be called a sporadical purchase, and not a pattern. To filter out even more, only customers who purchased more than 2 times in a specific year and did it for at least 3 years will be taken into account, that signifies a trend. This cuts away 75% of the customers, focusing on really the information we want, while still being statistically relevant, or at least as much as possible.
+--Honestly, my conclusion is that the results are quite random and no real pattern or true relevant business decision can be made from these numbers. Most customers buy twice with small value purchases, and once with big value purchases. But it's random the order of those.
+
+--14. The Sales Director wants to know which employees are responsible for customers who never placed an order.
+--Write a query that shows: Employee name, Customer name
+--Then explain in business terms:
+    --A) Are there specific employees associated with more inactive customers?
+    --B) How can this insight inform employee training or lead distribution strategy?
+    
+SELECT E.FirstName || ' ' || E.LastName AS SalesRep,
+C.FirstName || ' ' || C.LastName AS Customer
+FROM customers AS C
+FULL JOIN invoices AS I
+ON C.CustomerId = I.CustomerId
+    FULL JOIN employees AS E
+    ON E.EmployeeId = C.SupportRepId
+WHERE I.InvoiceId IS NULL
+AND C.CustomerId IS NOT NULL;
+
+--Apparently, every customer on the list has been active, meaning they have placed an order inside the 2009-2013 time range. Consequently, no SalesRep is responsible for any inactive customer. Meaning: Happy days!! It's not everyday you get 100% well in something, probably only in fake databases hahahaha
+
+--15. Write a query that returns the number of customers who: 
+    --1. Made exactly 1 purchase,
+    --2. Made 2 to 5 purchases
+    --3. Made more than 5 purchases
+--Group them into these three cohorts, and count how many customers fall into each group.
+--BUSINESS INSIGHT:
+    --A) Which cohort is the largest?
+    --B) What might this indicate about customer retention?
+    --C) How can this help the business segment marketing efforts or create targeted campaigns?
+
+WITH Final AS (
+    WITH Orders_per_Customer AS (
+        SELECT C.FirstName || ' ' || C.LastName AS Customer,
+        COUNT(I.InvoiceId) AS Orders,
+        C.CustomerId
+        FROM customers AS C
+        INNER JOIN invoices AS I
+        ON C.CustomerId = I.CustomerId
+        GROUP BY C.CustomerId)
+    
+    SELECT Customer,
+    Orders,
+    CustomerId,
+    CASE 
+        WHEN Orders = 1 THEN '1 Purchase'
+        WHEN Orders > 5 THEN 'More than 5 Purchases'
+        ELSE '2 to 5 Purchases'
+    END AS Cohort
+    FROM Orders_per_Customer)
+    
+SELECT Cohort AS Purchase_Cohort,
+COUNT(CustomerId)
+FROM Final
+GROUP BY Cohort;
+
+--All 59 customers purchased more than 5 times, in fact, all of them but one purchased 7 times, while the one that didn't, purchased 6 times. This means there's a ridiculous balance between all customers. the good news though is that every single customer purchased more than once, twice or even thrice. This means 100% of the customers have been retained successfully, until they didn't.
+--I wonder why all but one of them stopped buying after the 7th time. Perhaps this could indicate a technical problem that after the 7th time, the price goes ridiculously high, or maybe there's impossibility of purchasing. It is so unreal that all but one customers purchased exactly 7 times, that makes you wonder about technical issues.
+
+--16. We want to understand how many new customers we acquired each month. Can you show us the number of first-time buyers for each month from 2009 to 2013?
+--Write a query that returns: Year, Month, New_Customers: number of customers who made their first purchase in that month
+--After the query, explain:
+    --A) Were there months where customer acquisition peaked or dipped?
+    --B) What might explain those trends?
+    --C) How could the company capitalize on months with high acquisition, or improve slow ones?
+
+WITH First_Order_per_Customer AS (
+    SELECT MIN(InvoiceDate) AS First_Invoice,
+    CustomerId
+    FROM invoices
+    GROUP BY CustomerId)
+
+SELECT CAST(strftime('%m', First_Invoice) AS INTEGER) AS Month,
+CAST(strftime('%Y', First_Invoice) AS INTEGER) AS Year,
+COUNT(CustomerId) AS New_Customers
+FROM First_Order_per_Customer
+GROUP BY CAST(strftime('%m', First_Invoice) AS INTEGER), CAST(strftime('%Y', First_Invoice) AS INTEGER)
+ORDER BY Year, Month;
+
+--It seems the acquisition of new clients has stopped after July of 2010, after a gradual decline in 2009. This in itself is particularly alarming. The business is officially not making efforts to grow, but instead to maintain clients that eventually stop buying from it. The conclusion here is that we are doing everything wrong.
+--If we keep going this way, the business will go bankrupt sooner rather than later and we will all lose our jobs. I suggest an immediate emergency meeting with the directors, to decide now a new directiuon and new plans of action for the company.
+--We need to go back to making efforts in acquiring new clients. Advertising to cold audiences in social media platforms is an obvious start. But also appearing in podcasts, etc.. about music, creating new partnerships with influencers, among other practices.
+--If we don't use most of the money available in the company's bank account for this purpose, we will soon lose all that money.
